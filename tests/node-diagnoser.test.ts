@@ -31,26 +31,35 @@ describe('Module 6: Node Deep Diagnosers', () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  describe('Checklist 5: NODE_LTS Named Constant', () => {
-    it('verifies NODE_LTS is a single named constant and values are referenced', () => {
+  describe('Checklist 5: NODE_LTS Named Constant & Three-Tier Severity', () => {
+    it('verifies NODE_LTS constants and three-tier severity thresholds', () => {
       expect(NODE_LTS.ACTIVE).toBe(22);
       expect(NODE_LTS.MAINTENANCE).toBe(20);
+      expect(NODE_LTS.SEVERELY_OUTDATED).toBe(14);
 
-      // Warning when engine min version is below maintenance LTS
-      const oldEngineFindings = checkNodeRuntime({ engines: { node: '>= 12.0.0' } });
-      expect(oldEngineFindings).toHaveLength(1);
-      expect(oldEngineFindings[0].severity).toBe('warning');
-      expect(oldEngineFindings[0].category).toBe('runtime');
-      expect(oldEngineFindings[0].message).toContain(`minimum v12`);
-      expect(oldEngineFindings[0].message).toContain(`Maintenance LTS is Node ${NODE_LTS.MAINTENANCE}`);
+      // Critical tier: minVersion < SEVERELY_OUTDATED (< 14)
+      const criticalEngineFindings = checkNodeRuntime({ engines: { node: '>=10.0.0' } });
+      expect(criticalEngineFindings).toHaveLength(1);
+      expect(criticalEngineFindings[0].severity).toBe('critical');
+      expect(criticalEngineFindings[0].category).toBe('runtime');
+      expect(criticalEngineFindings[0].message).toContain('severely outdated');
+      expect(criticalEngineFindings[0].message).toContain('minimum v10');
 
-      // Info when engine min version is on maintenance LTS (< active LTS)
+      // Warning tier: minVersion < MAINTENANCE (< 20, but >= 14)
+      const warningEngineFindings = checkNodeRuntime({ engines: { node: '>= 16.0.0' } });
+      expect(warningEngineFindings).toHaveLength(1);
+      expect(warningEngineFindings[0].severity).toBe('warning');
+      expect(warningEngineFindings[0].category).toBe('runtime');
+      expect(warningEngineFindings[0].message).toContain(`minimum v16`);
+      expect(warningEngineFindings[0].message).toContain(`Maintenance LTS is Node ${NODE_LTS.MAINTENANCE}`);
+
+      // Info tier: minVersion on Maintenance LTS (< ACTIVE, >= MAINTENANCE)
       const maintEngineFindings = checkNodeRuntime({ engines: { node: '>= 20.0.0' } });
       expect(maintEngineFindings).toHaveLength(1);
       expect(maintEngineFindings[0].severity).toBe('info');
       expect(maintEngineFindings[0].message).toContain(`Node ${NODE_LTS.ACTIVE}`);
 
-      // Info when no engine is declared
+      // Info tier: no engine declared
       const noEngineFindings = checkNodeRuntime({});
       expect(noEngineFindings).toHaveLength(1);
       expect(noEngineFindings[0].severity).toBe('info');
@@ -251,10 +260,10 @@ describe('Module 6: Node Deep Diagnosers', () => {
       expect(expressMajorGap?.message).toContain('major version gap');
       expect(expressMajorGap?.autoFixable).toBe(false);
 
-      // 3. EOL Node runtime check for node >= 0.10.0 (severity: 'warning')
-      const runtimeFinding = findings.find((f) => f.category === 'runtime' && f.severity === 'warning');
+      // 3. Severely outdated Node runtime check for node >= 0.10.0 (severity: 'critical')
+      const runtimeFinding = findings.find((f) => f.category === 'runtime' && f.severity === 'critical');
       expect(runtimeFinding).toBeDefined();
-      expect(runtimeFinding?.message).toContain(`allows end-of-life Node.js`);
+      expect(runtimeFinding?.message).toContain('severely outdated');
 
       // 4. Confirm findings are sorted by severity: critical first, then warning, then info
       const severities = findings.map((f) => f.severity);
